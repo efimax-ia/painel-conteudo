@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +9,14 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-  LogOut, Search, Check, X, Heart, MessageCircle, Eye,
+  Search, Check, X, Heart, MessageCircle, Eye,
   ExternalLink, Clock, FileText, CheckCircle2, XCircle, Sparkles,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import efimaxLogo from "@/assets/efimax-logo.webp";
+import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { StatCard } from "@/components/dashboard/StatCard";
+import { formatNum } from "@/lib/format";
 
 type Platform = "instagram" | "tiktok" | "youtube" | "twitter" | "linkedin" | "facebook" | "other";
 type Status = "pending" | "approved" | "rejected";
@@ -52,7 +53,6 @@ const platformColors: Record<Platform, string> = {
 };
 
 export default function Dashboard() {
-  const { user, signOut } = useAuth();
   const [contents, setContents] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -119,113 +119,66 @@ export default function Dashboard() {
   }), [contents]);
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b bg-card/80 backdrop-blur-sm">
-        <div className="container flex items-center justify-between h-16 px-4 md:px-6">
-          <div className="flex items-center gap-3">
-            <img src={efimaxLogo} alt="Efimax" className="h-9 w-auto" width={90} height={36} />
-            <div className="hidden md:block h-8 w-px bg-border" />
-            <h1 className="hidden md:block text-base font-semibold text-foreground">
-              Painel de Conteúdo
-            </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:block text-sm text-muted-foreground truncate max-w-[200px]">
-              {user?.email}
-            </span>
-            <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sair">
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </div>
+    <DashboardLayout>
+      {/* Stats */}
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+        <StatCard icon={<FileText className="h-4 w-4" />} label="Total" value={stats.total} tone="default" />
+        <StatCard icon={<Clock className="h-4 w-4" />} label="Pendentes" value={stats.pending} tone="warning" />
+        <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="Aprovados" value={stats.approved} tone="success" />
+        <StatCard icon={<XCircle className="h-4 w-4" />} label="Rejeitados" value={stats.rejected} tone="destructive" />
+      </section>
+
+      {/* Filters */}
+      <section className="flex flex-col md:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por título, conteúdo ou perfil..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
-      </header>
-
-      <main className="container px-4 md:px-6 py-6 md:py-8 space-y-6">
-        {/* Stats */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-          <StatCard icon={<FileText className="h-4 w-4" />} label="Total" value={stats.total} tone="default" />
-          <StatCard icon={<Clock className="h-4 w-4" />} label="Pendentes" value={stats.pending} tone="warning" />
-          <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="Aprovados" value={stats.approved} tone="success" />
-          <StatCard icon={<XCircle className="h-4 w-4" />} label="Rejeitados" value={stats.rejected} tone="destructive" />
-        </section>
-
-        {/* Filters */}
-        <section className="flex flex-col md:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por título, conteúdo ou perfil..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select value={filterPlatform} onValueChange={setFilterPlatform}>
-            <SelectTrigger className="w-full md:w-[180px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas plataformas</SelectItem>
-              {Object.entries(platformLabels).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full md:w-[160px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos status</SelectItem>
-              <SelectItem value="pending">Pendente</SelectItem>
-              <SelectItem value="approved">Aprovado</SelectItem>
-              <SelectItem value="rejected">Rejeitado</SelectItem>
-            </SelectContent>
-          </Select>
-        </section>
-
-        {/* Content grid */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="h-64 animate-pulse bg-muted/40" />
+        <Select value={filterPlatform} onValueChange={setFilterPlatform}>
+          <SelectTrigger className="w-full md:w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas plataformas</SelectItem>
+            {Object.entries(platformLabels).map(([k, v]) => (
+              <SelectItem key={k} value={k}>{v}</SelectItem>
             ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <EmptyState hasContents={contents.length > 0} />
-        ) : (
-          <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map((c) => (
-              <ContentCard key={c.id} content={c} onApprove={handleApprove} onReject={handleReject} />
-            ))}
-          </section>
-        )}
-      </main>
-    </div>
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-full md:w-[160px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos status</SelectItem>
+            <SelectItem value="pending">Pendente</SelectItem>
+            <SelectItem value="approved">Aprovado</SelectItem>
+            <SelectItem value="rejected">Rejeitado</SelectItem>
+          </SelectContent>
+        </Select>
+      </section>
+
+      {/* Content grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="h-64 animate-pulse bg-muted/40" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState hasContents={contents.length > 0} />
+      ) : (
+        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map((c) => (
+            <ContentCard key={c.id} content={c} onApprove={handleApprove} onReject={handleReject} />
+          ))}
+        </section>
+      )}
+    </DashboardLayout>
   );
 }
 
-function StatCard({ icon, label, value, tone }: {
-  icon: React.ReactNode; label: string; value: number;
-  tone: "default" | "warning" | "success" | "destructive";
-}) {
-  const toneClasses = {
-    default: "text-primary bg-primary/10",
-    warning: "text-warning bg-warning/10",
-    success: "text-success bg-success/10",
-    destructive: "text-destructive bg-destructive/10",
-  };
-  return (
-    <Card className="p-4 border-border/60">
-      <div className="flex items-center gap-3">
-        <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${toneClasses[tone]}`}>
-          {icon}
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-xl font-bold text-foreground">{value}</p>
-        </div>
-      </div>
-    </Card>
-  );
-}
 
 function ContentCard({ content, onApprove, onReject }: {
   content: Content;
@@ -325,8 +278,3 @@ function EmptyState({ hasContents }: { hasContents: boolean }) {
   );
 }
 
-function formatNum(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
-  return n.toString();
-}
