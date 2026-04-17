@@ -14,7 +14,84 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      contents: {
+        Row: {
+          captured_at: string | null
+          comments: number | null
+          conteudo: string
+          created_at: string
+          id: string
+          likes: number | null
+          platform: Database["public"]["Enums"]["content_platform"] | null
+          source_profile: string | null
+          source_url: string | null
+          status: Database["public"]["Enums"]["approval_status"]
+          thumbnail_url: string | null
+          titulo: string
+          updated_at: string
+          views: number | null
+        }
+        Insert: {
+          captured_at?: string | null
+          comments?: number | null
+          conteudo: string
+          created_at?: string
+          id?: string
+          likes?: number | null
+          platform?: Database["public"]["Enums"]["content_platform"] | null
+          source_profile?: string | null
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["approval_status"]
+          thumbnail_url?: string | null
+          titulo: string
+          updated_at?: string
+          views?: number | null
+        }
+        Update: {
+          captured_at?: string | null
+          comments?: number | null
+          conteudo?: string
+          created_at?: string
+          id?: string
+          likes?: number | null
+          platform?: Database["public"]["Enums"]["content_platform"] | null
+          source_profile?: string | null
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["approval_status"]
+          thumbnail_url?: string | null
+          titulo?: string
+          updated_at?: string
+          views?: number | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +100,15 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      approval_status: "pending" | "approved" | "rejected"
+      content_platform:
+        | "instagram"
+        | "tiktok"
+        | "youtube"
+        | "twitter"
+        | "linkedin"
+        | "facebook"
+        | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +235,17 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      approval_status: ["pending", "approved", "rejected"],
+      content_platform: [
+        "instagram",
+        "tiktok",
+        "youtube",
+        "twitter",
+        "linkedin",
+        "facebook",
+        "other",
+      ],
+    },
   },
 } as const
