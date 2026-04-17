@@ -23,7 +23,6 @@ type Status = "pending" | "approved" | "rejected";
 
 interface Content {
   id: string;
-  titulo: string;
   conteudo: string;
   source_profile: string | null;
   source_url: string | null;
@@ -102,7 +101,6 @@ export default function Dashboard() {
     return contents.filter((c) => {
       const matchSearch =
         !search ||
-        c.titulo.toLowerCase().includes(search.toLowerCase()) ||
         c.conteudo.toLowerCase().includes(search.toLowerCase()) ||
         c.source_profile?.toLowerCase().includes(search.toLowerCase());
       const matchPlatform = filterPlatform === "all" || c.platform === filterPlatform;
@@ -133,7 +131,7 @@ export default function Dashboard() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por título, conteúdo ou perfil..."
+            placeholder="Buscar por conteúdo ou perfil..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -198,7 +196,7 @@ function ContentCard({ content, onApprove, onReject }: {
         <div className="aspect-video bg-muted overflow-hidden">
           <img
             src={content.thumbnail_url}
-            alt={content.titulo}
+            alt={content.conteudo.slice(0, 80)}
             className="w-full h-full object-cover"
             loading="lazy"
           />
@@ -214,10 +212,7 @@ function ContentCard({ content, onApprove, onReject }: {
         </div>
 
         <div className="space-y-1.5">
-          <h3 className="font-semibold text-foreground line-clamp-2 leading-snug">
-            {content.titulo}
-          </h3>
-          <p className="text-sm text-muted-foreground line-clamp-3">{content.conteudo}</p>
+          <p className="text-sm text-foreground line-clamp-5 whitespace-pre-line">{content.conteudo}</p>
         </div>
 
         {content.source_profile && (
