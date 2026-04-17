@@ -440,7 +440,7 @@ function Section({ icon, title, children, onCopy, copied }: {
   );
 }
 
-function EmptyStateInner({ hasItems }: { hasItems: boolean }) {
+function EmptyState({ hasItems }: { hasItems: boolean }) {
   return (
     <Card className="p-12 text-center border-dashed">
       <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
