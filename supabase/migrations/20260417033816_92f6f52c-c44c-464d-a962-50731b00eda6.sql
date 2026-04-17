@@ -1,0 +1,1 @@
+ALTER TABLE public.contents DROP COLUMN titulo;
