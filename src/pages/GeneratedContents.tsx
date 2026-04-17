@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -440,7 +440,7 @@ function Section({ icon, title, children, onCopy, copied }: {
   );
 }
 
-function EmptyState({ hasItems }: { hasItems: boolean }) {
+function EmptyStateInner({ hasItems }: { hasItems: boolean }) {
   return (
     <Card className="p-12 text-center border-dashed">
       <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
