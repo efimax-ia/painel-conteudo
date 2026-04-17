@@ -27,7 +27,6 @@ export type Database = {
           source_url: string | null
           status: Database["public"]["Enums"]["approval_status"]
           thumbnail_url: string | null
-          titulo: string
           updated_at: string
           views: number | null
         }
@@ -43,7 +42,6 @@ export type Database = {
           source_url?: string | null
           status?: Database["public"]["Enums"]["approval_status"]
           thumbnail_url?: string | null
-          titulo: string
           updated_at?: string
           views?: number | null
         }
@@ -59,7 +57,6 @@ export type Database = {
           source_url?: string | null
           status?: Database["public"]["Enums"]["approval_status"]
           thumbnail_url?: string | null
-          titulo?: string
           updated_at?: string
           views?: number | null
         }
