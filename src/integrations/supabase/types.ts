@@ -65,6 +65,77 @@ export type Database = {
         }
         Relationships: []
       }
+      generated_contents: {
+        Row: {
+          agent_name: string | null
+          cover_ideas: Json | null
+          created_at: string
+          generated_at: string | null
+          hashtags: string | null
+          id: string
+          legenda: string | null
+          observations: string | null
+          platform: Database["public"]["Enums"]["content_platform"] | null
+          rating: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          roteiro: string
+          source_content_id: string | null
+          status: Database["public"]["Enums"]["approval_status"]
+          tema: string | null
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          agent_name?: string | null
+          cover_ideas?: Json | null
+          created_at?: string
+          generated_at?: string | null
+          hashtags?: string | null
+          id?: string
+          legenda?: string | null
+          observations?: string | null
+          platform?: Database["public"]["Enums"]["content_platform"] | null
+          rating?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          roteiro: string
+          source_content_id?: string | null
+          status?: Database["public"]["Enums"]["approval_status"]
+          tema?: string | null
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          agent_name?: string | null
+          cover_ideas?: Json | null
+          created_at?: string
+          generated_at?: string | null
+          hashtags?: string | null
+          id?: string
+          legenda?: string | null
+          observations?: string | null
+          platform?: Database["public"]["Enums"]["content_platform"] | null
+          rating?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          roteiro?: string
+          source_content_id?: string | null
+          status?: Database["public"]["Enums"]["approval_status"]
+          tema?: string | null
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_contents_source_content_id_fkey"
+            columns: ["source_content_id"]
+            isOneToOne: false
+            referencedRelation: "contents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
