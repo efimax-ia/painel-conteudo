@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -9,32 +8,18 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-  Search, Check, X, Heart, MessageCircle, Eye,
-  ExternalLink, Clock, FileText, CheckCircle2, XCircle, Sparkles,
+  Search, Heart, MessageCircle, Eye, ExternalLink, Clock, FileText,
+  CheckCircle2, XCircle, Sparkles, Eye as EyeIcon,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { ContentReviewDialog, type ContentItem } from "@/components/dashboard/ContentReviewDialog";
 import { formatNum } from "@/lib/format";
 
 type Platform = "instagram" | "tiktok" | "youtube" | "twitter" | "linkedin" | "facebook" | "other";
-type Status = "pending" | "approved" | "rejected";
-
-interface Content {
-  id: string;
-  conteudo: string;
-  source_profile: string | null;
-  source_url: string | null;
-  platform: Platform;
-  likes: number;
-  comments: number;
-  views: number;
-  thumbnail_url: string | null;
-  status: Status;
-  captured_at: string;
-  created_at: string;
-}
+type Content = ContentItem;
 
 const platformLabels: Record<Platform, string> = {
   instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube",
@@ -57,17 +42,14 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [filterPlatform, setFilterPlatform] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [selected, setSelected] = useState<Content | null>(null);
 
   useEffect(() => {
     fetchContents();
-
     const channel = supabase
       .channel("contents-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "contents" }, () => {
-        fetchContents();
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "contents" }, fetchContents)
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, []);
 
@@ -76,33 +58,18 @@ export default function Dashboard() {
       .from("contents")
       .select("*")
       .order("created_at", { ascending: false });
-
-    if (error) {
-      toast.error("Erro ao carregar conteúdos", { description: error.message });
-    } else {
-      setContents((data ?? []) as Content[]);
-    }
+    if (error) toast.error("Erro ao carregar conteúdos", { description: error.message });
+    else setContents((data ?? []) as Content[]);
     setLoading(false);
-  };
-
-  const handleApprove = (id: string) => {
-    toast.success("Aprovado (demonstração)", {
-      description: "Botão de aprovação será funcional em breve.",
-    });
-  };
-
-  const handleReject = (id: string) => {
-    toast("Rejeitado (demonstração)", {
-      description: "Botão de rejeição será funcional em breve.",
-    });
   };
 
   const filtered = useMemo(() => {
     return contents.filter((c) => {
+      const s = search.toLowerCase();
       const matchSearch =
-        !search ||
-        c.conteudo.toLowerCase().includes(search.toLowerCase()) ||
-        c.source_profile?.toLowerCase().includes(search.toLowerCase());
+        !s ||
+        c.conteudo.toLowerCase().includes(s) ||
+        c.source_profile?.toLowerCase().includes(s);
       const matchPlatform = filterPlatform === "all" || c.platform === filterPlatform;
       const matchStatus = filterStatus === "all" || c.status === filterStatus;
       return matchSearch && matchPlatform && matchStatus;
@@ -118,7 +85,6 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      {/* Stats */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <StatCard icon={<FileText className="h-4 w-4" />} label="Total" value={stats.total} tone="default" />
         <StatCard icon={<Clock className="h-4 w-4" />} label="Pendentes" value={stats.pending} tone="warning" />
@@ -126,7 +92,6 @@ export default function Dashboard() {
         <StatCard icon={<XCircle className="h-4 w-4" />} label="Rejeitados" value={stats.rejected} tone="destructive" />
       </section>
 
-      {/* Filters */}
       <section className="flex flex-col md:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -157,32 +122,30 @@ export default function Dashboard() {
         </Select>
       </section>
 
-      {/* Content grid */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="h-64 animate-pulse bg-muted/40" />
-          ))}
+          {[1, 2, 3].map((i) => <Card key={i} className="h-64 animate-pulse bg-muted/40" />)}
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState hasContents={contents.length > 0} />
       ) : (
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((c) => (
-            <ContentCard key={c.id} content={c} onApprove={handleApprove} onReject={handleReject} />
+            <ContentCard key={c.id} content={c} onOpen={() => setSelected(c)} />
           ))}
         </section>
       )}
+
+      <ContentReviewDialog
+        item={selected}
+        onClose={() => setSelected(null)}
+        onSaved={() => { setSelected(null); fetchContents(); }}
+      />
     </DashboardLayout>
   );
 }
 
-
-function ContentCard({ content, onApprove, onReject }: {
-  content: Content;
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
-}) {
+function ContentCard({ content, onOpen }: { content: Content; onOpen: () => void }) {
   const date = new Date(content.captured_at || content.created_at);
   const statusBadge = {
     pending: <Badge variant="secondary" className="bg-warning/15 text-warning hover:bg-warning/20 border-0"><Clock className="h-3 w-3 mr-1" />Pendente</Badge>,
@@ -191,13 +154,16 @@ function ContentCard({ content, onApprove, onReject }: {
   }[content.status];
 
   return (
-    <Card className="overflow-hidden flex flex-col border-border/60 hover:shadow-brand transition-shadow animate-fade-in">
+    <Card
+      onClick={onOpen}
+      className="overflow-hidden flex flex-col border-border/60 hover:shadow-brand transition-all animate-fade-in cursor-pointer group"
+    >
       {content.thumbnail_url && (
         <div className="aspect-video bg-muted overflow-hidden">
           <img
             src={content.thumbnail_url}
             alt={content.conteudo.slice(0, 80)}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
             loading="lazy"
           />
         </div>
@@ -211,9 +177,9 @@ function ContentCard({ content, onApprove, onReject }: {
           {statusBadge}
         </div>
 
-        <div className="space-y-1.5">
-          <p className="text-sm text-foreground line-clamp-5 whitespace-pre-line">{content.conteudo}</p>
-        </div>
+        <p className="text-sm text-foreground line-clamp-5 whitespace-pre-line group-hover:text-primary transition-colors">
+          {content.conteudo}
+        </p>
 
         {content.source_profile && (
           <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -233,22 +199,20 @@ function ContentCard({ content, onApprove, onReject }: {
             {formatDistanceToNow(date, { addSuffix: true, locale: ptBR })}
           </span>
           {content.source_url && (
-            <a href={content.source_url} target="_blank" rel="noopener noreferrer"
-               className="text-primary hover:underline flex items-center gap-1">
+            <a
+              href={content.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-primary hover:underline flex items-center gap-1"
+            >
               Ver post <ExternalLink className="h-3 w-3" />
             </a>
           )}
         </div>
 
-        <div className="flex gap-2 pt-2">
-          <Button variant="outline" size="sm" className="flex-1 hover:bg-success/10 hover:text-success hover:border-success/30"
-                  onClick={() => onApprove(content.id)}>
-            <Check className="h-4 w-4 mr-1" /> Aprovar
-          </Button>
-          <Button variant="outline" size="sm" className="flex-1 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
-                  onClick={() => onReject(content.id)}>
-            <X className="h-4 w-4 mr-1" /> Rejeitar
-          </Button>
+        <div className="flex items-center justify-center gap-1 text-xs text-primary font-medium pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <EyeIcon className="h-3 w-3" /> Clique para ver e editar
         </div>
       </div>
     </Card>
@@ -272,4 +236,3 @@ function EmptyState({ hasContents }: { hasContents: boolean }) {
     </Card>
   );
 }
-
