@@ -28,6 +28,7 @@ export type Database = {
           status: Database["public"]["Enums"]["approval_status"]
           thumbnail_url: string | null
           updated_at: string
+          used_at: string | null
           views: number | null
         }
         Insert: {
@@ -43,6 +44,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["approval_status"]
           thumbnail_url?: string | null
           updated_at?: string
+          used_at?: string | null
           views?: number | null
         }
         Update: {
@@ -58,6 +60,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["approval_status"]
           thumbnail_url?: string | null
           updated_at?: string
+          used_at?: string | null
           views?: number | null
         }
         Relationships: []
@@ -165,7 +168,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      notify_edge_function: {
+        Args: { _function_name: string; _payload: Json }
+        Returns: undefined
+      }
     }
     Enums: {
       approval_status: "pending" | "approved" | "rejected"
