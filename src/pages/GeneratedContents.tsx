@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -61,6 +62,7 @@ export default function GeneratedContents() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selected, setSelected] = useState<Generated | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     fetchItems();
@@ -70,6 +72,22 @@ export default function GeneratedContents() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  // Abre o modal automaticamente quando vier ?id=xxx (link do WhatsApp)
+  useEffect(() => {
+    const id = searchParams.get("id");
+    if (!id || items.length === 0) return;
+    const found = items.find((i) => i.id === id);
+    if (found) setSelected(found);
+  }, [items, searchParams]);
+
+  const closeDialog = () => {
+    setSelected(null);
+    if (searchParams.get("id")) {
+      searchParams.delete("id");
+      setSearchParams(searchParams, { replace: true });
+    }
+  };
 
   const fetchItems = async () => {
     const { data, error } = await supabase
@@ -151,8 +169,8 @@ export default function GeneratedContents() {
 
       <ReviewDialog
         item={selected}
-        onClose={() => setSelected(null)}
-        onSaved={() => { setSelected(null); fetchItems(); }}
+        onClose={closeDialog}
+        onSaved={() => { closeDialog(); fetchItems(); }}
       />
     </DashboardLayout>
   );
