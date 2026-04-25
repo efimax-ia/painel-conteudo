@@ -4,7 +4,7 @@ const corsHeaders = {
 };
 
 const TARGET_NUMBER = "5551984150800";
-const APP_URL = "https://painel-conteudo.lovable.app";
+const APP_URL = "https://painel-conteudo-efimax.vercel.app";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
