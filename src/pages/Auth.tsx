@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useNavigate, Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -13,11 +13,15 @@ import efimaxLogo from "@/assets/efimax-logo.webp";
 export default function Auth() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from =
+    (location.state as { from?: { pathname: string; search: string } } | null)?.from;
+  const redirectTo = from ? `${from.pathname}${from.search ?? ""}` : "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={redirectTo} replace />;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +34,7 @@ export default function Auth() {
       return;
     }
     toast.success("Bem-vindo de volta!");
-    navigate("/");
+    navigate(redirectTo, { replace: true });
   };
 
   return (
