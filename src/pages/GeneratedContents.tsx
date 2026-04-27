@@ -485,4 +485,69 @@ function EmptyState({ hasItems }: { hasItems: boolean }) {
   );
 }
 
+/**
+ * Parser que extrai seções de um texto bruto vindo do n8n no formato:
+ *   [ROTEIRO PARA VÍDEO] ... [DICA DE LEGENDA] ... [IDEIAS DE CAPA — N OPÇÕES]
+ * Os separadores `---` são opcionais. Tolerante a variações (Roteiro, Legenda, etc).
+ */
+function parseRawContent(raw: string): { roteiro: string; legenda: string; covers: CoverIdea[] } {
+  const empty = { roteiro: "", legenda: "", covers: [] as CoverIdea[] };
+  if (!raw) return empty;
+
+  // Detecta rótulos de seção (com ou sem colchetes)
+  const sectionRegex = /\[?\s*(ROTEIRO[^\]\n]*|DICA DE LEGENDA[^\]\n]*|LEGENDA[^\]\n]*|IDEIAS? DE CAPA[^\]\n]*|HASHTAGS?[^\]\n]*)\s*\]?/gi;
+  const matches = [...raw.matchAll(sectionRegex)];
+  if (matches.length === 0) return empty;
+
+  const sections: Record<string, string> = {};
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    const label = m[1].toUpperCase().trim();
+    const start = m.index! + m[0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index! : raw.length;
+    let body = raw.slice(start, end).trim();
+    // remove separadores --- no começo/fim
+    body = body.replace(/^[-–—\s]+/, "").replace(/[-–—\s]+$/, "").trim();
+
+    let key = "";
+    if (label.startsWith("ROTEIRO")) key = "roteiro";
+    else if (label.startsWith("DICA DE LEGENDA") || label.startsWith("LEGENDA")) key = "legenda";
+    else if (label.startsWith("IDEIA")) key = "covers";
+    else if (label.startsWith("HASHTAG")) key = "hashtags";
+    if (key) sections[key] = body;
+  }
+
+  const covers: CoverIdea[] = [];
+  if (sections.covers) {
+    // Divide por "Opção N:" e parseia "Título | Prompt IA: ..."
+    const parts = sections.covers.split(/\n?\s*Op[çc][ãa]o\s*\d+\s*:\s*/i).filter((p) => p.trim());
+    for (const part of parts) {
+      const cleaned = part.trim();
+      if (!cleaned) continue;
+      const promptMatch = cleaned.match(/\|\s*Prompt\s*IA\s*:\s*([\s\S]*)/i);
+      if (promptMatch) {
+        const titulo = cleaned.slice(0, promptMatch.index).replace(/\|$/, "").trim();
+        covers.push({ titulo, prompt: promptMatch[1].trim() });
+      } else {
+        covers.push({ titulo: cleaned });
+      }
+    }
+  }
+
+  return {
+    roteiro: sections.roteiro || "",
+    legenda: sections.legenda || "",
+    covers,
+  };
+}
+
+function formatSingleCover(c: CoverIdea, i: number): string {
+  const titulo = c.titulo ? `Opção ${i + 1}: ${c.titulo}` : `Opção ${i + 1}`;
+  return c.prompt ? `${titulo}\n\nPrompt IA: ${c.prompt}` : titulo;
+}
+
+function formatCoversForCopy(covers: CoverIdea[]): string {
+  return covers.map((c, i) => formatSingleCover(c, i)).join("\n\n---\n\n");
+}
+
 
