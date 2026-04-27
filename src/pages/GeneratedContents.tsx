@@ -269,7 +269,13 @@ function ReviewDialog({
   }, [item]);
 
   if (!item) return null;
-  const covers: CoverIdea[] = Array.isArray(item.cover_ideas) ? item.cover_ideas : [];
+
+  // Extrai roteiro/legenda/capas do texto bruto quando vier tudo no campo roteiro
+  const parsed = parseRawContent(item.roteiro);
+  const roteiroText = parsed.roteiro || item.roteiro;
+  const legendaText = item.legenda || parsed.legenda || "";
+  const dbCovers: CoverIdea[] = Array.isArray(item.cover_ideas) ? item.cover_ideas : [];
+  const covers: CoverIdea[] = dbCovers.length > 0 ? dbCovers : parsed.covers;
 
   const copy = async (text: string, key: string) => {
     await navigator.clipboard.writeText(text);
