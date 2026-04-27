@@ -269,7 +269,13 @@ function ReviewDialog({
   }, [item]);
 
   if (!item) return null;
-  const covers: CoverIdea[] = Array.isArray(item.cover_ideas) ? item.cover_ideas : [];
+
+  // Extrai roteiro/legenda/capas do texto bruto quando vier tudo no campo roteiro
+  const parsed = parseRawContent(item.roteiro);
+  const roteiroText = parsed.roteiro || item.roteiro;
+  const legendaText = item.legenda || parsed.legenda || "";
+  const dbCovers: CoverIdea[] = Array.isArray(item.cover_ideas) ? item.cover_ideas : [];
+  const covers: CoverIdea[] = dbCovers.length > 0 ? dbCovers : parsed.covers;
 
   const copy = async (text: string, key: string) => {
     await navigator.clipboard.writeText(text);
@@ -319,17 +325,17 @@ function ReviewDialog({
 
         <div className="space-y-5">
           {/* Roteiro */}
-          <Section icon={<Film className="h-4 w-4" />} title="Roteiro (HeyGen)" onCopy={() => copy(item.roteiro, "roteiro")} copied={copied === "roteiro"}>
+          <Section icon={<Film className="h-4 w-4" />} title="ROTEIRO PARA VÍDEO" onCopy={() => copy(roteiroText, "roteiro")} copied={copied === "roteiro"}>
             <div className="bg-muted/40 border rounded-lg p-4 text-sm whitespace-pre-line leading-relaxed">
-              {item.roteiro}
+              {roteiroText}
             </div>
           </Section>
 
           {/* Legenda */}
-          {item.legenda && (
-            <Section icon={<MessageSquare className="h-4 w-4" />} title="Legenda" onCopy={() => copy(item.legenda!, "legenda")} copied={copied === "legenda"}>
+          {legendaText && (
+            <Section icon={<MessageSquare className="h-4 w-4" />} title="DICA DE LEGENDA" onCopy={() => copy(legendaText, "legenda")} copied={copied === "legenda"}>
               <div className="bg-muted/40 border rounded-lg p-4 text-sm whitespace-pre-line leading-relaxed">
-                {item.legenda}
+                {legendaText}
               </div>
             </Section>
           )}
@@ -346,9 +352,14 @@ function ReviewDialog({
           {/* Capas */}
           {covers.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-sm font-semibold flex items-center gap-2">
-                <ImageIcon className="h-4 w-4" /> Ideias de capa ({covers.length})
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4" /> IDEIAS DE CAPA — {covers.length} {covers.length === 1 ? "OPÇÃO" : "OPÇÕES"}
+                </h4>
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => copy(formatCoversForCopy(covers), "all-covers")}>
+                  {copied === "all-covers" ? <><Check className="h-3 w-3 mr-1" />Copiado</> : <><Copy className="h-3 w-3 mr-1" />Copiar tudo</>}
+                </Button>
+              </div>
               <div className="grid gap-3">
                 {covers.map((c, i) => (
                   <Card key={i} className="p-4 border-border/60 space-y-2">
@@ -357,11 +368,9 @@ function ReviewDialog({
                         <span className="text-primary mr-2">Opção {i + 1}:</span>
                         {c.titulo}
                       </p>
-                      {c.prompt && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => copy(c.prompt!, `cover-${i}`)}>
-                          {copied === `cover-${i}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                        </Button>
-                      )}
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => copy(formatSingleCover(c, i), `cover-${i}`)}>
+                        {copied === `cover-${i}` ? <><Check className="h-3 w-3 mr-1" />Copiado</> : <><Copy className="h-3 w-3 mr-1" />Copiar</>}
+                      </Button>
                     </div>
                     {c.prompt && (
                       <p className="text-xs text-muted-foreground bg-muted/40 border rounded p-2">
@@ -474,6 +483,71 @@ function EmptyState({ hasItems }: { hasItems: boolean }) {
       </p>
     </Card>
   );
+}
+
+/**
+ * Parser que extrai seções de um texto bruto vindo do n8n no formato:
+ *   [ROTEIRO PARA VÍDEO] ... [DICA DE LEGENDA] ... [IDEIAS DE CAPA — N OPÇÕES]
+ * Os separadores `---` são opcionais. Tolerante a variações (Roteiro, Legenda, etc).
+ */
+function parseRawContent(raw: string): { roteiro: string; legenda: string; covers: CoverIdea[] } {
+  const empty = { roteiro: "", legenda: "", covers: [] as CoverIdea[] };
+  if (!raw) return empty;
+
+  // Detecta rótulos de seção (com ou sem colchetes)
+  const sectionRegex = /\[?\s*(ROTEIRO[^\]\n]*|DICA DE LEGENDA[^\]\n]*|LEGENDA[^\]\n]*|IDEIAS? DE CAPA[^\]\n]*|HASHTAGS?[^\]\n]*)\s*\]?/gi;
+  const matches = [...raw.matchAll(sectionRegex)];
+  if (matches.length === 0) return empty;
+
+  const sections: Record<string, string> = {};
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    const label = m[1].toUpperCase().trim();
+    const start = m.index! + m[0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index! : raw.length;
+    let body = raw.slice(start, end).trim();
+    // remove separadores --- no começo/fim
+    body = body.replace(/^[-–—\s]+/, "").replace(/[-–—\s]+$/, "").trim();
+
+    let key = "";
+    if (label.startsWith("ROTEIRO")) key = "roteiro";
+    else if (label.startsWith("DICA DE LEGENDA") || label.startsWith("LEGENDA")) key = "legenda";
+    else if (label.startsWith("IDEIA")) key = "covers";
+    else if (label.startsWith("HASHTAG")) key = "hashtags";
+    if (key) sections[key] = body;
+  }
+
+  const covers: CoverIdea[] = [];
+  if (sections.covers) {
+    // Divide por "Opção N:" e parseia "Título | Prompt IA: ..."
+    const parts = sections.covers.split(/\n?\s*Op[çc][ãa]o\s*\d+\s*:\s*/i).filter((p) => p.trim());
+    for (const part of parts) {
+      const cleaned = part.trim();
+      if (!cleaned) continue;
+      const promptMatch = cleaned.match(/\|\s*Prompt\s*IA\s*:\s*([\s\S]*)/i);
+      if (promptMatch) {
+        const titulo = cleaned.slice(0, promptMatch.index).replace(/\|$/, "").trim();
+        covers.push({ titulo, prompt: promptMatch[1].trim() });
+      } else {
+        covers.push({ titulo: cleaned });
+      }
+    }
+  }
+
+  return {
+    roteiro: sections.roteiro || "",
+    legenda: sections.legenda || "",
+    covers,
+  };
+}
+
+function formatSingleCover(c: CoverIdea, i: number): string {
+  const titulo = c.titulo ? `Opção ${i + 1}: ${c.titulo}` : `Opção ${i + 1}`;
+  return c.prompt ? `${titulo}\n\nPrompt IA: ${c.prompt}` : titulo;
+}
+
+function formatCoversForCopy(covers: CoverIdea[]): string {
+  return covers.map((c, i) => formatSingleCover(c, i)).join("\n\n---\n\n");
 }
 
 
