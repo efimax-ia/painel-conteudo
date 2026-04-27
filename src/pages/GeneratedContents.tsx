@@ -325,17 +325,17 @@ function ReviewDialog({
 
         <div className="space-y-5">
           {/* Roteiro */}
-          <Section icon={<Film className="h-4 w-4" />} title="Roteiro (HeyGen)" onCopy={() => copy(item.roteiro, "roteiro")} copied={copied === "roteiro"}>
+          <Section icon={<Film className="h-4 w-4" />} title="ROTEIRO PARA VÍDEO" onCopy={() => copy(roteiroText, "roteiro")} copied={copied === "roteiro"}>
             <div className="bg-muted/40 border rounded-lg p-4 text-sm whitespace-pre-line leading-relaxed">
-              {item.roteiro}
+              {roteiroText}
             </div>
           </Section>
 
           {/* Legenda */}
-          {item.legenda && (
-            <Section icon={<MessageSquare className="h-4 w-4" />} title="Legenda" onCopy={() => copy(item.legenda!, "legenda")} copied={copied === "legenda"}>
+          {legendaText && (
+            <Section icon={<MessageSquare className="h-4 w-4" />} title="DICA DE LEGENDA" onCopy={() => copy(legendaText, "legenda")} copied={copied === "legenda"}>
               <div className="bg-muted/40 border rounded-lg p-4 text-sm whitespace-pre-line leading-relaxed">
-                {item.legenda}
+                {legendaText}
               </div>
             </Section>
           )}
@@ -352,9 +352,14 @@ function ReviewDialog({
           {/* Capas */}
           {covers.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-sm font-semibold flex items-center gap-2">
-                <ImageIcon className="h-4 w-4" /> Ideias de capa ({covers.length})
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4" /> IDEIAS DE CAPA — {covers.length} {covers.length === 1 ? "OPÇÃO" : "OPÇÕES"}
+                </h4>
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => copy(formatCoversForCopy(covers), "all-covers")}>
+                  {copied === "all-covers" ? <><Check className="h-3 w-3 mr-1" />Copiado</> : <><Copy className="h-3 w-3 mr-1" />Copiar tudo</>}
+                </Button>
+              </div>
               <div className="grid gap-3">
                 {covers.map((c, i) => (
                   <Card key={i} className="p-4 border-border/60 space-y-2">
@@ -363,11 +368,9 @@ function ReviewDialog({
                         <span className="text-primary mr-2">Opção {i + 1}:</span>
                         {c.titulo}
                       </p>
-                      {c.prompt && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => copy(c.prompt!, `cover-${i}`)}>
-                          {copied === `cover-${i}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                        </Button>
-                      )}
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => copy(formatSingleCover(c, i), `cover-${i}`)}>
+                        {copied === `cover-${i}` ? <><Check className="h-3 w-3 mr-1" />Copiado</> : <><Copy className="h-3 w-3 mr-1" />Copiar</>}
+                      </Button>
                     </div>
                     {c.prompt && (
                       <p className="text-xs text-muted-foreground bg-muted/40 border rounded p-2">
