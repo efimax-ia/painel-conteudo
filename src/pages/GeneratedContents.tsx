@@ -499,56 +499,59 @@ function EmptyState({ hasItems }: { hasItems: boolean }) {
  *   [ROTEIRO PARA VÍDEO] ... [DICA DE LEGENDA] ... [IDEIAS DE CAPA — N OPÇÕES]
  * Os separadores `---` são opcionais. Tolerante a variações (Roteiro, Legenda, etc).
  */
+function cleanSectionBody(value: string): string {
+  return value
+    .replace(/^[-–—\s]+/, "")
+    .replace(/[-–—\s]+$/, "")
+    .trim();
+}
+
+function extractSection(raw: string, startPattern: RegExp, endPatterns: RegExp[]): string {
+  const startMatch = startPattern.exec(raw);
+  if (!startMatch) return "";
+
+  const startIndex = startMatch.index + startMatch[0].length;
+  const remaining = raw.slice(startIndex);
+  const endIndexes = endPatterns
+    .map((pattern) => pattern.exec(remaining)?.index ?? -1)
+    .filter((index) => index >= 0);
+
+  const endIndex = endIndexes.length > 0 ? startIndex + Math.min(...endIndexes) : raw.length;
+  return cleanSectionBody(raw.slice(startIndex, endIndex));
+}
+
 function parseRawContent(raw: string): ParsedGeneratedContent {
   const empty: ParsedGeneratedContent = { roteiro: "", legenda: "", hashtags: "", covers: [] };
   if (!raw) return empty;
 
-  // Detecta rótulos de seção (com ou sem colchetes)
-  const sectionRegex = /\[?\s*(ROTEIRO[^\]\n]*|DICA DE LEGENDA[^\]\n]*|LEGENDA[^\]\n]*|IDEIAS? DE CAPA[^\]\n]*|HASHTAGS?[^\]\n]*)\s*\]?/gi;
-  const matches = [...raw.matchAll(sectionRegex)];
-  if (matches.length === 0) return empty;
+  const roteiroHeading = /(?:^|\r?\n)\s*\[?\s*ROTEIRO(?:\s+PARA\s+V[ÍI]DEO)?[^\]\n]*\]?/i;
+  const legendaHeading = /(?:^|\r?\n)\s*\[?\s*(?:DICA\s+DE\s+)?LEGENDA[^\]\n]*\]?/i;
+  const hashtagsHeading = /(?:^|\r?\n)\s*\[?\s*HASHTAGS?[^\]\n]*\]?/i;
+  const coversHeading = /(?:^|\r?\n)\s*\[?\s*IDEIAS?\s+DE\s+CAPA[^\]\n]*\]?/i;
 
-  const sections: Record<string, string> = {};
-  for (let i = 0; i < matches.length; i++) {
-    const m = matches[i];
-    const label = m[1].toUpperCase().trim();
-    const start = m.index! + m[0].length;
-    const end = i + 1 < matches.length ? matches[i + 1].index! : raw.length;
-    let body = raw.slice(start, end).trim();
-    // remove separadores --- no começo/fim
-    body = body.replace(/^[-–—\s]+/, "").replace(/[-–—\s]+$/, "").trim();
-
-    let key = "";
-    if (label.startsWith("ROTEIRO")) key = "roteiro";
-    else if (label.startsWith("DICA DE LEGENDA") || label.startsWith("LEGENDA")) key = "legenda";
-    else if (label.startsWith("IDEIA")) key = "covers";
-    else if (label.startsWith("HASHTAG")) key = "hashtags";
-    if (key) sections[key] = body;
-  }
+  const roteiro = extractSection(raw, roteiroHeading, [legendaHeading, hashtagsHeading, coversHeading]);
+  const legenda = extractSection(raw, legendaHeading, [hashtagsHeading, coversHeading]);
+  const hashtags = extractSection(raw, hashtagsHeading, [coversHeading]);
+  const coversText = extractSection(raw, coversHeading, []);
 
   const covers: CoverIdea[] = [];
-  if (sections.covers) {
-    // Divide por "Opção N:" e parseia "Título | Prompt IA: ..."
-    const parts = sections.covers.split(/\n?\s*Op[çc][ãa]o\s*\d+\s*:\s*/i).filter((p) => p.trim());
+  if (coversText) {
+    const parts = coversText.split(/\n?\s*Op[çc][ãa]o\s*\d+\s*:\s*/i).filter((part) => part.trim());
     for (const part of parts) {
-      const cleaned = part.trim();
+      const cleaned = cleanSectionBody(part);
       if (!cleaned) continue;
+
       const promptMatch = cleaned.match(/\|\s*Prompt\s*IA\s*:\s*([\s\S]*)/i);
       if (promptMatch) {
-        const titulo = cleaned.slice(0, promptMatch.index).replace(/\|$/, "").trim();
-        covers.push({ titulo, prompt: promptMatch[1].trim() });
+        const titulo = cleanSectionBody(cleaned.slice(0, promptMatch.index ?? 0).replace(/\|$/, ""));
+        covers.push({ titulo, prompt: cleanSectionBody(promptMatch[1]) });
       } else {
         covers.push({ titulo: cleaned });
       }
     }
   }
 
-  return {
-    roteiro: sections.roteiro || "",
-    legenda: sections.legenda || "",
-    hashtags: sections.hashtags || "",
-    covers,
-  };
+  return { roteiro, legenda, hashtags, covers };
 }
 
 function parseLegendaAndHashtags(text: string | null | undefined): Pick<ParsedGeneratedContent, "legenda" | "hashtags"> {
@@ -586,7 +589,7 @@ function parseGeneratedContent(item: Generated): ParsedGeneratedContent {
   const legendaParts = parseLegendaAndHashtags(item.legenda || parsedFromRaw.legenda);
 
   return {
-    roteiro: parsedFromRaw.roteiro || item.roteiro,
+    roteiro: cleanSectionBody(parsedFromRaw.roteiro || item.roteiro),
     legenda: legendaParts.legenda,
     hashtags: item.hashtags || parsedFromRaw.hashtags || legendaParts.hashtags,
     covers: dbCovers.length > 0 ? dbCovers : parsedFromRaw.covers,
