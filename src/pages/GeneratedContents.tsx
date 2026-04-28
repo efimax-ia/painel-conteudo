@@ -499,8 +499,8 @@ function EmptyState({ hasItems }: { hasItems: boolean }) {
  *   [ROTEIRO PARA VÍDEO] ... [DICA DE LEGENDA] ... [IDEIAS DE CAPA — N OPÇÕES]
  * Os separadores `---` são opcionais. Tolerante a variações (Roteiro, Legenda, etc).
  */
-function parseRawContent(raw: string): { roteiro: string; legenda: string; covers: CoverIdea[] } {
-  const empty = { roteiro: "", legenda: "", covers: [] as CoverIdea[] };
+function parseRawContent(raw: string): ParsedGeneratedContent {
+  const empty: ParsedGeneratedContent = { roteiro: "", legenda: "", hashtags: "", covers: [] };
   if (!raw) return empty;
 
   // Detecta rótulos de seção (com ou sem colchetes)
@@ -546,7 +546,50 @@ function parseRawContent(raw: string): { roteiro: string; legenda: string; cover
   return {
     roteiro: sections.roteiro || "",
     legenda: sections.legenda || "",
+    hashtags: sections.hashtags || "",
     covers,
+  };
+}
+
+function parseLegendaAndHashtags(text: string | null | undefined): Pick<ParsedGeneratedContent, "legenda" | "hashtags"> {
+  const value = (text || "").trim();
+  if (!value) return { legenda: "", hashtags: "" };
+
+  const lines = value.split(/\r?\n/);
+  const legendaLines: string[] = [];
+  const hashtagLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (hashtagLines.length === 0) legendaLines.push(line);
+      continue;
+    }
+
+    if (trimmed.startsWith("#") || hashtagLines.length > 0) {
+      hashtagLines.push(trimmed);
+      continue;
+    }
+
+    legendaLines.push(line);
+  }
+
+  return {
+    legenda: legendaLines.join("\n").trim(),
+    hashtags: hashtagLines.join("\n").trim(),
+  };
+}
+
+function parseGeneratedContent(item: Generated): ParsedGeneratedContent {
+  const parsedFromRaw = parseRawContent(item.roteiro);
+  const dbCovers: CoverIdea[] = Array.isArray(item.cover_ideas) ? item.cover_ideas : [];
+  const legendaParts = parseLegendaAndHashtags(item.legenda || parsedFromRaw.legenda);
+
+  return {
+    roteiro: parsedFromRaw.roteiro || item.roteiro,
+    legenda: legendaParts.legenda,
+    hashtags: item.hashtags || parsedFromRaw.hashtags || legendaParts.hashtags,
+    covers: dbCovers.length > 0 ? dbCovers : parsedFromRaw.covers,
   };
 }
 
