@@ -33,6 +33,13 @@ interface CoverIdea {
   prompt?: string;
 }
 
+interface ParsedGeneratedContent {
+  roteiro: string;
+  legenda: string;
+  hashtags: string;
+  covers: CoverIdea[];
+}
+
 interface Generated {
   id: string;
   titulo: string;
@@ -191,7 +198,7 @@ function statusBadge(status: Status) {
 
 function GeneratedCard({ item, onOpen }: { item: Generated; onOpen: () => void }) {
   const date = new Date(item.generated_at || item.created_at);
-  const covers = Array.isArray(item.cover_ideas) ? item.cover_ideas : [];
+  const parsed = parseGeneratedContent(item);
 
   return (
     <Card className="overflow-hidden flex flex-col border-border/60 hover:shadow-brand transition-all animate-fade-in cursor-pointer group" onClick={onOpen}>
@@ -216,15 +223,18 @@ function GeneratedCard({ item, onOpen }: { item: Generated; onOpen: () => void }
           <h3 className="font-semibold text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors">
             {item.titulo}
           </h3>
-          <p className="text-sm text-muted-foreground line-clamp-3 whitespace-pre-line">{item.roteiro}</p>
+          <p className="text-sm text-muted-foreground line-clamp-3 whitespace-pre-line">{parsed.roteiro || item.roteiro}</p>
         </div>
 
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          {item.legenda && (
+          {parsed.legenda && (
             <span className="flex items-center gap-1"><MessageSquare className="h-3 w-3" />Legenda</span>
           )}
-          {covers.length > 0 && (
-            <span className="flex items-center gap-1"><ImageIcon className="h-3 w-3" />{covers.length} {covers.length === 1 ? "capa" : "capas"}</span>
+          {parsed.hashtags && (
+            <span className="flex items-center gap-1"><Hash className="h-3 w-3" />Hashtags</span>
+          )}
+          {parsed.covers.length > 0 && (
+            <span className="flex items-center gap-1"><ImageIcon className="h-3 w-3" />{parsed.covers.length} {parsed.covers.length === 1 ? "capa" : "capas"}</span>
           )}
           {item.agent_name && (
             <span className="flex items-center gap-1"><Sparkles className="h-3 w-3" />{item.agent_name}</span>
@@ -270,12 +280,11 @@ function ReviewDialog({
 
   if (!item) return null;
 
-  // Extrai roteiro/legenda/capas do texto bruto quando vier tudo no campo roteiro
-  const parsed = parseRawContent(item.roteiro);
+  const parsed = parseGeneratedContent(item);
   const roteiroText = parsed.roteiro || item.roteiro;
-  const legendaText = item.legenda || parsed.legenda || "";
-  const dbCovers: CoverIdea[] = Array.isArray(item.cover_ideas) ? item.cover_ideas : [];
-  const covers: CoverIdea[] = dbCovers.length > 0 ? dbCovers : parsed.covers;
+  const legendaText = parsed.legenda;
+  const hashtagsText = parsed.hashtags;
+  const covers = parsed.covers;
 
   const copy = async (text: string, key: string) => {
     await navigator.clipboard.writeText(text);
@@ -341,10 +350,10 @@ function ReviewDialog({
           )}
 
           {/* Hashtags */}
-          {item.hashtags && (
-            <Section icon={<Hash className="h-4 w-4" />} title="Hashtags" onCopy={() => copy(item.hashtags!, "hashtags")} copied={copied === "hashtags"}>
+          {hashtagsText && (
+            <Section icon={<Hash className="h-4 w-4" />} title="Hashtags" onCopy={() => copy(hashtagsText, "hashtags")} copied={copied === "hashtags"}>
               <div className="bg-muted/40 border rounded-lg p-4 text-sm text-primary">
-                {item.hashtags}
+                {hashtagsText}
               </div>
             </Section>
           )}
@@ -490,8 +499,8 @@ function EmptyState({ hasItems }: { hasItems: boolean }) {
  *   [ROTEIRO PARA VÍDEO] ... [DICA DE LEGENDA] ... [IDEIAS DE CAPA — N OPÇÕES]
  * Os separadores `---` são opcionais. Tolerante a variações (Roteiro, Legenda, etc).
  */
-function parseRawContent(raw: string): { roteiro: string; legenda: string; covers: CoverIdea[] } {
-  const empty = { roteiro: "", legenda: "", covers: [] as CoverIdea[] };
+function parseRawContent(raw: string): ParsedGeneratedContent {
+  const empty: ParsedGeneratedContent = { roteiro: "", legenda: "", hashtags: "", covers: [] };
   if (!raw) return empty;
 
   // Detecta rótulos de seção (com ou sem colchetes)
@@ -537,7 +546,50 @@ function parseRawContent(raw: string): { roteiro: string; legenda: string; cover
   return {
     roteiro: sections.roteiro || "",
     legenda: sections.legenda || "",
+    hashtags: sections.hashtags || "",
     covers,
+  };
+}
+
+function parseLegendaAndHashtags(text: string | null | undefined): Pick<ParsedGeneratedContent, "legenda" | "hashtags"> {
+  const value = (text || "").trim();
+  if (!value) return { legenda: "", hashtags: "" };
+
+  const lines = value.split(/\r?\n/);
+  const legendaLines: string[] = [];
+  const hashtagLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (hashtagLines.length === 0) legendaLines.push(line);
+      continue;
+    }
+
+    if (trimmed.startsWith("#") || hashtagLines.length > 0) {
+      hashtagLines.push(trimmed);
+      continue;
+    }
+
+    legendaLines.push(line);
+  }
+
+  return {
+    legenda: legendaLines.join("\n").trim(),
+    hashtags: hashtagLines.join("\n").trim(),
+  };
+}
+
+function parseGeneratedContent(item: Generated): ParsedGeneratedContent {
+  const parsedFromRaw = parseRawContent(item.roteiro);
+  const dbCovers: CoverIdea[] = Array.isArray(item.cover_ideas) ? item.cover_ideas : [];
+  const legendaParts = parseLegendaAndHashtags(item.legenda || parsedFromRaw.legenda);
+
+  return {
+    roteiro: parsedFromRaw.roteiro || item.roteiro,
+    legenda: legendaParts.legenda,
+    hashtags: item.hashtags || parsedFromRaw.hashtags || legendaParts.hashtags,
+    covers: dbCovers.length > 0 ? dbCovers : parsedFromRaw.covers,
   };
 }
 
