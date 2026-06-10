@@ -9,7 +9,7 @@ import {
 import { toast } from "sonner";
 import {
   Search, Heart, MessageCircle, Eye, ExternalLink, Clock, FileText,
-  CheckCircle2, XCircle, Sparkles, Eye as EyeIcon,
+  CheckCircle2, XCircle, Sparkles, Eye as EyeIcon, Filter, RotateCcw,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -17,6 +17,7 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ContentReviewDialog, type ContentItem } from "@/components/dashboard/ContentReviewDialog";
 import { formatNum } from "@/lib/format";
+import { Button } from "@/components/ui/button";
 
 type Platform = "instagram" | "tiktok" | "youtube" | "twitter" | "linkedin" | "facebook" | "other";
 type Content = ContentItem;
@@ -81,15 +82,30 @@ export default function Dashboard() {
     pending: contents.filter((c) => c.status === "pending").length,
     approved: contents.filter((c) => c.status === "approved").length,
     rejected: contents.filter((c) => c.status === "rejected").length,
+    filtered_out: contents.filter((c) => c.status === "filtered_out").length,
   }), [contents]);
+
+  const handleRecover = async (id: string) => {
+    const { error } = await supabase
+      .from("contents")
+      .update({ status: "pending" })
+      .eq("id", id);
+    if (error) {
+      toast.error("Erro ao recuperar conteúdo", { description: error.message });
+      return;
+    }
+    setContents((prev) => prev.filter((c) => c.id !== id));
+    toast.success("Conteúdo recuperado para revisão");
+  };
 
   return (
     <DashboardLayout>
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4">
         <StatCard icon={<FileText className="h-4 w-4" />} label="Total" value={stats.total} tone="default" />
         <StatCard icon={<Clock className="h-4 w-4" />} label="Pendentes" value={stats.pending} tone="warning" />
         <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="Aprovados" value={stats.approved} tone="success" />
         <StatCard icon={<XCircle className="h-4 w-4" />} label="Rejeitados" value={stats.rejected} tone="destructive" />
+        <StatCard icon={<Filter className="h-4 w-4" />} label="Filtrados pela IA" value={stats.filtered_out} tone="warning" />
       </section>
 
       <section className="flex flex-col md:flex-row gap-3">
@@ -118,6 +134,7 @@ export default function Dashboard() {
             <SelectItem value="pending">Pendente</SelectItem>
             <SelectItem value="approved">Aprovado</SelectItem>
             <SelectItem value="rejected">Rejeitado</SelectItem>
+            <SelectItem value="filtered_out">Filtrados pela IA</SelectItem>
           </SelectContent>
         </Select>
       </section>
@@ -131,7 +148,12 @@ export default function Dashboard() {
       ) : (
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((c) => (
-            <ContentCard key={c.id} content={c} onOpen={() => setSelected(c)} />
+            <ContentCard
+              key={c.id}
+              content={c}
+              onOpen={() => setSelected(c)}
+              onRecover={c.status === "filtered_out" ? () => handleRecover(c.id) : undefined}
+            />
           ))}
         </section>
       )}
@@ -145,12 +167,21 @@ export default function Dashboard() {
   );
 }
 
-function ContentCard({ content, onOpen }: { content: Content; onOpen: () => void }) {
+function ContentCard({
+  content,
+  onOpen,
+  onRecover,
+}: {
+  content: Content;
+  onOpen: () => void;
+  onRecover?: () => void;
+}) {
   const date = new Date(content.captured_at || content.created_at);
   const statusBadge = {
     pending: <Badge variant="secondary" className="bg-warning/15 text-warning hover:bg-warning/20 border-0"><Clock className="h-3 w-3 mr-1" />Pendente</Badge>,
     approved: <Badge variant="secondary" className="bg-success/15 text-success hover:bg-success/20 border-0"><CheckCircle2 className="h-3 w-3 mr-1" />Aprovado</Badge>,
     rejected: <Badge variant="secondary" className="bg-destructive/15 text-destructive hover:bg-destructive/20 border-0"><XCircle className="h-3 w-3 mr-1" />Rejeitado</Badge>,
+    filtered_out: <Badge variant="secondary" className="bg-warning/15 text-warning hover:bg-warning/20 border-0"><Filter className="h-3 w-3 mr-1" />Filtrado pela IA</Badge>,
   }[content.status];
 
   return (
@@ -211,9 +242,20 @@ function ContentCard({ content, onOpen }: { content: Content; onOpen: () => void
           )}
         </div>
 
-        <div className="flex items-center justify-center gap-1 text-xs text-primary font-medium pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <EyeIcon className="h-3 w-3" /> Clique para ver e editar
-        </div>
+        {onRecover ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full"
+            onClick={(e) => { e.stopPropagation(); onRecover(); }}
+          >
+            <RotateCcw className="h-3 w-3 mr-1" /> Recuperar para revisão
+          </Button>
+        ) : (
+          <div className="flex items-center justify-center gap-1 text-xs text-primary font-medium pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <EyeIcon className="h-3 w-3" /> Clique para ver e editar
+          </div>
+        )}
       </div>
     </Card>
   );
