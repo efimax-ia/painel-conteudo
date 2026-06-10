@@ -10,17 +10,28 @@ import { toast } from "sonner";
 import {
   Search, Heart, MessageCircle, Eye, ExternalLink, Clock, FileText,
   CheckCircle2, XCircle, Sparkles, Eye as EyeIcon, Filter, RotateCcw,
+  Trash2, Calendar as CalendarIcon, X,
 } from "lucide-react";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow, format, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ContentReviewDialog, type ContentItem } from "@/components/dashboard/ContentReviewDialog";
 import { formatNum } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
 type Platform = "instagram" | "tiktok" | "youtube" | "twitter" | "linkedin" | "facebook" | "other";
 type Content = ContentItem;
+type StatusTab = "pending" | "approved" | "rejected" | "filtered_out";
 
 const platformLabels: Record<Platform, string> = {
   instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube",
@@ -42,7 +53,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterPlatform, setFilterPlatform] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [tab, setTab] = useState<StatusTab>("pending");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
   const [selected, setSelected] = useState<Content | null>(null);
 
   useEffect(() => {
@@ -66,16 +79,19 @@ export default function Dashboard() {
 
   const filtered = useMemo(() => {
     return contents.filter((c) => {
+      if (c.status !== tab) return false;
       const s = search.toLowerCase();
       const matchSearch =
         !s ||
         c.conteudo.toLowerCase().includes(s) ||
         c.source_profile?.toLowerCase().includes(s);
       const matchPlatform = filterPlatform === "all" || c.platform === filterPlatform;
-      const matchStatus = filterStatus === "all" || c.status === filterStatus;
-      return matchSearch && matchPlatform && matchStatus;
+      const ref = new Date(c.captured_at || c.created_at);
+      const matchFrom = !dateFrom || !isBefore(ref, startOfDay(dateFrom));
+      const matchTo = !dateTo || !isAfter(ref, endOfDay(dateTo));
+      return matchSearch && matchPlatform && matchFrom && matchTo;
     });
-  }, [contents, search, filterPlatform, filterStatus]);
+  }, [contents, search, filterPlatform, tab, dateFrom, dateTo]);
 
   const stats = useMemo(() => ({
     total: contents.length,
@@ -98,6 +114,31 @@ export default function Dashboard() {
     toast.success("Conteúdo recuperado para revisão");
   };
 
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase.from("contents").delete().eq("id", id);
+    if (error) {
+      toast.error("Erro ao excluir", { description: error.message });
+      return;
+    }
+    setContents((prev) => prev.filter((c) => c.id !== id));
+    toast.success("Conteúdo excluído");
+  };
+
+  const handleClearAll = async () => {
+    const ids = contents.filter((c) => c.status === tab).map((c) => c.id);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from("contents").delete().in("id", ids);
+    if (error) {
+      toast.error("Erro ao limpar", { description: error.message });
+      return;
+    }
+    setContents((prev) => prev.filter((c) => c.status !== tab));
+    toast.success(`${ids.length} conteúdo(s) excluído(s)`);
+  };
+
+  const clearDates = () => { setDateFrom(undefined); setDateTo(undefined); };
+  const tabCount = (s: StatusTab) => stats[s];
+
   return (
     <DashboardLayout>
       <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4">
@@ -107,6 +148,15 @@ export default function Dashboard() {
         <StatCard icon={<XCircle className="h-4 w-4" />} label="Rejeitados" value={stats.rejected} tone="destructive" />
         <StatCard icon={<Filter className="h-4 w-4" />} label="Filtrados pela IA" value={stats.filtered_out} tone="warning" />
       </section>
+
+      <Tabs value={tab} onValueChange={(v) => setTab(v as StatusTab)}>
+        <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full md:w-auto">
+          <TabsTrigger value="pending">Pendentes ({tabCount("pending")})</TabsTrigger>
+          <TabsTrigger value="approved">Aprovados ({tabCount("approved")})</TabsTrigger>
+          <TabsTrigger value="rejected">Rejeitados ({tabCount("rejected")})</TabsTrigger>
+          <TabsTrigger value="filtered_out">Filtrados pela IA ({tabCount("filtered_out")})</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <section className="flex flex-col md:flex-row gap-3">
         <div className="relative flex-1">
@@ -127,16 +177,34 @@ export default function Dashboard() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-full md:w-[160px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos status</SelectItem>
-            <SelectItem value="pending">Pendente</SelectItem>
-            <SelectItem value="approved">Aprovado</SelectItem>
-            <SelectItem value="rejected">Rejeitado</SelectItem>
-            <SelectItem value="filtered_out">Filtrados pela IA</SelectItem>
-          </SelectContent>
-        </Select>
+        <DateRangeButton label="De" date={dateFrom} onChange={setDateFrom} />
+        <DateRangeButton label="Até" date={dateTo} onChange={setDateTo} />
+        {(dateFrom || dateTo) && (
+          <Button variant="ghost" size="icon" onClick={clearDates} title="Limpar datas">
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+        {(tab === "rejected" || tab === "filtered_out") && tabCount(tab) > 0 && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" className="md:ml-auto">
+                <Trash2 className="h-4 w-4 mr-1" /> Limpar tudo
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir todos os conteúdos desta aba?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação não pode ser desfeita. {tabCount(tab)} conteúdo(s) serão removidos permanentemente.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleClearAll}>Excluir tudo</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </section>
 
       {loading ? (
@@ -153,6 +221,7 @@ export default function Dashboard() {
               content={c}
               onOpen={() => setSelected(c)}
               onRecover={c.status === "filtered_out" ? () => handleRecover(c.id) : undefined}
+              onDelete={() => handleDelete(c.id)}
             />
           ))}
         </section>
@@ -171,10 +240,12 @@ function ContentCard({
   content,
   onOpen,
   onRecover,
+  onDelete,
 }: {
   content: Content;
   onOpen: () => void;
   onRecover?: () => void;
+  onDelete: () => void;
 }) {
   const date = new Date(content.captured_at || content.created_at);
   const statusBadge = {
@@ -243,21 +314,90 @@ function ContentCard({
         </div>
 
         {onRecover ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full"
-            onClick={(e) => { e.stopPropagation(); onRecover(); }}
-          >
-            <RotateCcw className="h-3 w-3 mr-1" /> Recuperar para revisão
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1"
+              onClick={(e) => { e.stopPropagation(); onRecover(); }}
+            >
+              <RotateCcw className="h-3 w-3 mr-1" /> Recuperar
+            </Button>
+            <DeleteButton onConfirm={onDelete} />
+          </div>
         ) : (
-          <div className="flex items-center justify-center gap-1 text-xs text-primary font-medium pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <EyeIcon className="h-3 w-3" /> Clique para ver e editar
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <div className="flex items-center gap-1 text-xs text-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+              <EyeIcon className="h-3 w-3" /> Clique para ver e editar
+            </div>
+            <DeleteButton onConfirm={onDelete} />
           </div>
         )}
       </div>
     </Card>
+  );
+}
+
+function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+          onClick={(e) => e.stopPropagation()}
+          title="Excluir"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir este conteúdo?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta ação não pode ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={(e) => { e.stopPropagation(); onConfirm(); }}>
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function DateRangeButton({
+  label, date, onChange,
+}: { label: string; date?: Date; onChange: (d?: Date) => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn(
+            "w-full md:w-[150px] justify-start text-left font-normal",
+            !date && "text-muted-foreground"
+          )}
+        >
+          <CalendarIcon className="h-4 w-4 mr-2" />
+          {date ? format(date, "dd/MM/yyyy") : <span>{label}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={date}
+          onSelect={onChange}
+          initialFocus
+          locale={ptBR}
+          className={cn("p-3 pointer-events-auto")}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 
