@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 type Platform = "instagram" | "tiktok" | "youtube" | "twitter" | "linkedin" | "facebook" | "other";
-type Status = "pending" | "approved" | "rejected";
+type Status = "pending" | "approved" | "rejected" | "filtered_out";
 
 export interface ContentItem {
   id: string;
