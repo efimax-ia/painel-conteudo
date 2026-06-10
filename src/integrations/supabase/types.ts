@@ -174,7 +174,7 @@ export type Database = {
       }
     }
     Enums: {
-      approval_status: "pending" | "approved" | "rejected"
+      approval_status: "pending" | "approved" | "rejected" | "filtered_out"
       content_platform:
         | "instagram"
         | "tiktok"
@@ -310,7 +310,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      approval_status: ["pending", "approved", "rejected"],
+      approval_status: ["pending", "approved", "rejected", "filtered_out"],
       content_platform: [
         "instagram",
         "tiktok",
